@@ -45,3 +45,10 @@ def train(args):
 if __name__ == '__main__':
     args = get_args()
     train(args)
+
+
+#python play.py --sim_device=cuda --rl_device=cuda --num_envs 4096 --max_iterations=500 --task=anymal_c_rough
+#python train.py --sim_device=cuda --rl_device=cuda --num_envs 500 --max_iterations=500 --task=anymal_c_rough
+
+#python train.py --sim_device=cuda --rl_device=cuda --num_envs 10 --max_iterations=500 --task=a1_rough
+#python play.py --sim_device=cuda --rl_device=cuda --num_envs 100 --max_iterations=500 --task=a1_rough
