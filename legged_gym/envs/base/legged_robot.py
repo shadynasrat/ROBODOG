@@ -44,7 +44,7 @@ from typing import Tuple, Dict
 from legged_gym import LEGGED_GYM_ROOT_DIR
 from legged_gym.envs.base.base_task import BaseTask
 from legged_gym.utils.terrain import Terrain
-from legged_gym.utils.math import quat_apply_yaw, wrap_to_pi, torch_rand_sqrt_float
+from legged_gym.utils.math import quat_apply_yaw, wrap_to_pi, torch_rand_sqrt_float, angle_to_vector
 from legged_gym.utils.helpers import class_to_dict
 from .legged_robot_config import LeggedRobotCfg
 
@@ -134,6 +134,7 @@ class LeggedRobot(BaseTask):
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
+        self._draw_helper_direction()
 
     def check_termination(self):
         """ Check if environments need to be reset
@@ -668,6 +669,7 @@ class LeggedRobot(BaseTask):
         env_upper = gymapi.Vec3(0., 0., 0.)
         self.actor_handles = []
         self.envs = []
+
         for i in range(self.num_envs):
             # create env instance
             env_handle = self.gym.create_env(self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs)))
@@ -757,6 +759,45 @@ class LeggedRobot(BaseTask):
                 z = heights[j]
                 sphere_pose = gymapi.Transform(gymapi.Vec3(x, y, z), r=None)
                 gymutil.draw_lines(sphere_geom, self.gym, self.viewer, self.envs[i], sphere_pose) 
+
+    def _draw_helper_direction(self):
+        """ Draws visualizations for dubugging (slows down simulation a lot).
+            Default behaviour: draws target direction
+        """
+        # draw height lines
+        if not self.terrain.cfg.direction_helper:
+            return
+        self.gym.clear_lines(self.viewer)
+        self.gym.refresh_rigid_body_state_tensor(self.sim)
+        red_balls = gymutil.WireframeSphereGeometry(radius= 0.1, color=(1, 0, 0))
+        blu_balls = gymutil.WireframeSphereGeometry(radius= 0.05, color=(0, 1, 1))
+        ylw_balls = gymutil.WireframeSphereGeometry(radius= 0.05, color=(1, 1, 0))
+        grn_balls = gymutil.WireframeSphereGeometry(radius= 0.1, color=(0, 1, 0))
+                
+        heading_Base = quat_apply(self.base_quat, self.forward_vec)             #blue
+        #heading_Goal = quat_apply(self.commands[:,:4], self.forward_vec)
+        #heading_Goal = quat_apply_yaw(self.forward_vec, self.commands[:,:3])      #green
+        lin_vel_Base = quat_apply_yaw(self.base_quat, self.base_lin_vel)        #yellow
+        lin_vel_Goal = quat_apply_yaw(self.base_quat, self.commands[:,:3])      #red
+
+        for i in range(self.num_envs):
+            base_pos = (self.root_states[i, :3]).cpu().numpy()
+            
+
+            linear_Base = [base_pos[0] + lin_vel_Base[i][0]    , base_pos[1] + lin_vel_Base[i][1]     , base_pos[2]]                #Base linear velocity
+            linear_Goal = [base_pos[0] + lin_vel_Goal[i][0]    , base_pos[1] + lin_vel_Goal[i][1]     , base_pos[2]]                #Goal linear velocity
+            angle_Base  = [base_pos[0] + heading_Base[i][0]    , base_pos[1] + heading_Base[i][1]     , base_pos[2]]                #Base angle velocity
+            angle_Goal  = [base_pos[0] + angle_to_vector((self.commands[i][3]).cpu().numpy())[0]      , base_pos[1] + angle_to_vector((self.commands[i][3]).cpu().numpy())[1]     , base_pos[2]]                 #Goal angle velocity
+
+            lin_Base = gymapi.Transform(gymapi.Vec3(linear_Base[0],linear_Base[1],linear_Base[2]), r=None)
+            lin_Goal = gymapi.Transform(gymapi.Vec3(linear_Goal[0],linear_Goal[1],linear_Goal[2]), r=None)
+            ang_Base = gymapi.Transform(gymapi.Vec3(angle_Base[0],angle_Base[1],angle_Base[2]), r=None)
+            ang_Goal = gymapi.Transform(gymapi.Vec3(angle_Goal[0],angle_Goal[1],angle_Goal[2]), r=None)
+            
+            gymutil.draw_lines(red_balls, self.gym, self.viewer, self.envs[i], lin_Goal)
+            gymutil.draw_lines(ylw_balls, self.gym, self.viewer, self.envs[i], lin_Base)
+            gymutil.draw_lines(grn_balls, self.gym, self.viewer, self.envs[i], ang_Goal)
+            gymutil.draw_lines(blu_balls, self.gym, self.viewer, self.envs[i], ang_Base)
 
     def _init_height_points(self):
         """ Returns points at which the height measurments are sampled (in base frame)
