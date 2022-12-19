@@ -44,9 +44,10 @@ from typing import Tuple, Dict
 from legged_gym import LEGGED_GYM_ROOT_DIR
 from legged_gym.envs.base.base_task import BaseTask
 from legged_gym.utils.terrain import Terrain
-from legged_gym.utils.math import quat_apply_yaw, wrap_to_pi, torch_rand_sqrt_float, angle_to_vector
+from legged_gym.utils.math import quat_apply_yaw, wrap_to_pi, torch_rand_sqrt_float, angle_to_vector, vector_to_angle
 from legged_gym.utils.helpers import class_to_dict
 from .legged_robot_config import LeggedRobotCfg
+from legged_gym.scripts.controller import controller
 
 class LeggedRobot(BaseTask):
     def __init__(self, cfg: LeggedRobotCfg, sim_params, physics_engine, sim_device, headless):
@@ -65,8 +66,9 @@ class LeggedRobot(BaseTask):
         self.cfg = cfg
         self.sim_params = sim_params
         self.height_samples = None
-        self.debug_viz = False
+        self.debug_viz = True
         self.init_done = False
+        self.xlin_vel = 1.0
         self._parse_cfg(self.cfg)
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
@@ -134,7 +136,7 @@ class LeggedRobot(BaseTask):
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
-        self._draw_helper_direction()
+            self._draw_helper_direction()
 
     def check_termination(self):
         """ Check if environments need to be reset
@@ -321,10 +323,11 @@ class LeggedRobot(BaseTask):
     def _post_physics_step_callback(self):
         """ Callback called before computing terminations, rewards, and observations
             Default behaviour: Compute ang vel command based on target and heading, compute measured terrain heights and randomly push robots
-        """
-        # 
-        env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
-        self._resample_commands(env_ids)
+        """ 
+     
+        #env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
+        self.update_command()
+        
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
@@ -341,15 +344,34 @@ class LeggedRobot(BaseTask):
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
         """
-        self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-        self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-        if self.cfg.commands.heading_command:
-            self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-        else:
-            self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+        #self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+        #self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+        self.commands[env_ids, 0] = torch.tensor(0.0, device=self.device)
+        self.commands[env_ids, 1] = torch.tensor(0.0, device=self.device)
 
+        if self.cfg.commands.heading_command:
+            #self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+            self.commands[env_ids, 3] = torch.tensor(0.0, device=self.device)
+        else:
+            #self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+            self.commands[env_ids, 2] = torch.tensor(0.0, device=self.device)
+        
         # set small commands to zero
-        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+        # self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+
+    def _commands_control(self, env_ids):
+        """ Control commands of environments at once
+
+        Args:
+            env_ids (List[int]): Environments ids for which new commands are needed
+        """
+        self.commands[env_ids, 0] = torch.tensor(0.0, device=self.device)
+        self.commands[env_ids, 1] = torch.tensor(1.0, device=self.device)
+
+        if self.cfg.commands.heading_command:
+            self.commands[env_ids, 3] = torch.tensor(0.0, device=self.device)
+        else:
+            self.commands[env_ids, 2] = torch.tensor(0.0, device=self.device)
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.
@@ -390,6 +412,7 @@ class LeggedRobot(BaseTask):
         self.gym.set_dof_state_tensor_indexed(self.sim,
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+   
     def _reset_root_states(self, env_ids):
         """ Resets ROOT states position and velocities of selected environmments
             Sets base position based on the curriculum
@@ -452,6 +475,25 @@ class LeggedRobot(BaseTask):
             self.command_ranges["lin_vel_x"][0] = np.clip(self.command_ranges["lin_vel_x"][0] - 0.5, -self.cfg.commands.max_curriculum, 0.)
             self.command_ranges["lin_vel_x"][1] = np.clip(self.command_ranges["lin_vel_x"][1] + 0.5, 0., self.cfg.commands.max_curriculum)
 
+    def update_command(self):
+        """ Implements a curriculum of increasing commands
+
+        Args:
+            env_ids (List[int]): ids of environments being reset
+        
+        "wasd" keyboard
+        """
+
+        self.commands[:, 0] = torch.tensor(controller.x, device=self.device)
+        self.commands[:, 1] = torch.tensor(-controller.y, device=self.device)
+        self.commands[:, 2] = torch.tensor(0.0, device=self.device)
+
+        self.hx = 0
+        self.hy = 0
+
+        angle = vector_to_angle(controller.hx, controller.hy)
+        self.commands[:, 3] = torch.tensor(angle, device=self.device)
+        print(angle)
 
     def _get_noise_scale_vec(self, cfg):
         """ Sets a vector used to scale the noise added to the observations.
@@ -775,8 +817,6 @@ class LeggedRobot(BaseTask):
         grn_balls = gymutil.WireframeSphereGeometry(radius= 0.1, color=(0, 1, 0))
                 
         heading_Base = quat_apply(self.base_quat, self.forward_vec)             #blue
-        #heading_Goal = quat_apply(self.commands[:,:4], self.forward_vec)
-        #heading_Goal = quat_apply_yaw(self.forward_vec, self.commands[:,:3])      #green
         lin_vel_Base = quat_apply_yaw(self.base_quat, self.base_lin_vel)        #yellow
         lin_vel_Goal = quat_apply_yaw(self.base_quat, self.commands[:,:3])      #red
 

@@ -33,6 +33,7 @@ from torch import Tensor
 import numpy as np
 from isaacgym.torch_utils import quat_apply, normalize
 from typing import Tuple
+import math
 
 # @ torch.jit.script
 def quat_apply_yaw(quat, vec):
@@ -59,3 +60,7 @@ def angle_to_vector(angle):
     x = np.cos(angle)
     y = np.sin(angle)
     return [x,y]
+
+def vector_to_angle(x, y):
+    angle = math.atan2(y,x)
+    return angle
