@@ -12,61 +12,73 @@ class MyController(Controller):
         self.y = 0
         self.hx = 0
         self.hy = 0
+        self.logger = False
 
     def on_L3_up(self, value):
         self.x = - 2 * value / 32767
-
-        print("on_L3_up: {}".format(self.x))
+        if self.logger == True:
+            print("on_L3_up: {}".format(self.x))
 
     def on_L3_down(self, value):
         self.x = - 2 * value / 32767
-        print("on_L3_down: {}".format(self.x))
+        if self.logger == True:
+            print("on_L3_down: {}".format(self.x))
 
     def on_L3_left(self, value):
         self.y = 2 * value / 32767
-        print("on_L3_left: {}".format(self.y))
+        if self.logger == True:
+            print("on_L3_left: {}".format(self.y))
 
     def on_L3_right(self, value):
         self.y = 2 * value / 32767
-        print("on_L3_right: {}".format(self.y))
+        if self.logger == True:
+            print("on_L3_right: {}".format(self.y))
 
     def on_L3_y_at_rest(self):
         """L3 joystick is at rest after the joystick was moved and let go off"""
         self.y = 0 
-        print("on_L3_y_at_rest")
+        if self.logger == True:
+            print("on_L3_y_at_rest")
 
     def on_L3_x_at_rest(self):
         """L3 joystick is at rest after the joystick was moved and let go off"""
         self.x = 0
-        print("on_L3_x_at_rest")
+        if self.logger == True:
+            print("on_L3_x_at_rest")
     
 
 
     def on_R3_up(self, value):
         self.hx = - value/32767
-        print("on_R3_up: {}".format(self.hx))
+        if self.logger == True:
+            print("on_R3_up: {}".format(self.hx))
 
     def on_R3_down(self, value):
         self.hx = - value/32767
-        print("on_R3_down: {}".format(self.hx))
+        if self.logger == True:
+            print("on_R3_down: {}".format(self.hx))
 
     def on_R3_left(self, value):
         self.hy = value/32767
-        print("on_R3_left: {}".format(self.hy))
+        if self.logger == True:
+            print("on_R3_left: {}".format(self.hy))
 
     def on_R3_right(self, value):
         self.hy = value/32767
-        print("on_R3_right: {}".format(self.hy))
+        if self.logger == True:
+            print("on_R3_right: {}".format(self.hy))
 
     def on_R3_y_at_rest(self):
         """R3 joystick is at rest after the joystick was moved and let go off"""
         self.hx = 0 
-        print("on_R3_y_at_rest")
+        if self.logger == True:
+            print("on_R3_y_at_rest")
 
     def on_R3_x_at_rest(self):
         """R3 joystick is at rest after the joystick was moved and let go off"""
         self.hy = 0 
-        print("on_R3_x_at_rest")
+        if self.logger == True:
+            print("on_R3_x_at_rest")
 
 
 
