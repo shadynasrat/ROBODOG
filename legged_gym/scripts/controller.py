@@ -40,30 +40,32 @@ class MyController(Controller):
         self.x = 0
         print("on_L3_x_at_rest")
     
+
+
     def on_R3_up(self, value):
-        self.xh = - value/32767
-        print("on_R3_up: {}".format(self.xh))
+        self.hx = - value/32767
+        print("on_R3_up: {}".format(self.hx))
 
     def on_R3_down(self, value):
-        self.xh = - value/32767
-        print("on_R3_down: {}".format(self.xh))
+        self.hx = - value/32767
+        print("on_R3_down: {}".format(self.hx))
 
     def on_R3_left(self, value):
-        self.yh = value/32767
-        print("on_R3_left: {}".format(self.yh))
+        self.hy = value/32767
+        print("on_R3_left: {}".format(self.hy))
 
     def on_R3_right(self, value):
-        self.yh = value/32767
-        print("on_R3_right: {}".format(self.yh))
+        self.hy = value/32767
+        print("on_R3_right: {}".format(self.hy))
 
     def on_R3_y_at_rest(self):
         """R3 joystick is at rest after the joystick was moved and let go off"""
-        self.xh = 0 
+        self.hx = 0 
         print("on_R3_y_at_rest")
 
     def on_R3_x_at_rest(self):
         """R3 joystick is at rest after the joystick was moved and let go off"""
-        self.yh = 0 
+        self.hy = 0 
         print("on_R3_x_at_rest")
 
 
