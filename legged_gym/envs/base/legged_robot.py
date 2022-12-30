@@ -483,7 +483,7 @@ class LeggedRobot(BaseTask):
         
         "wasd" keyboard
         """
-
+        controller.logger = False
         self.commands[:, 0] = torch.tensor(controller.x, device=self.device)
         self.commands[:, 1] = torch.tensor(-controller.y, device=self.device)
         self.commands[:, 2] = torch.tensor(0.0, device=self.device)
@@ -493,7 +493,6 @@ class LeggedRobot(BaseTask):
 
         angle = vector_to_angle(controller.hx, controller.hy)
         self.commands[:, 3] = torch.tensor(angle, device=self.device)
-        print(angle)
 
     def _get_noise_scale_vec(self, cfg):
         """ Sets a vector used to scale the noise added to the observations.
