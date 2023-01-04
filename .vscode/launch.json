@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            //"program": "${file}",
+            "program": "/home/sj/Desktop/SHADYcodes/ROBODOG/legged_gym/scripts/play.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "python": "${command:python.interpreterPath}",
+            "args": ["--sim_device", "cuda", "--rl_device=cuda", "--num_envs", "1000", "--max_iterations","500", "--task", "solo_flat", "--load_run", "/home/sj/Desktop/SHADYcodes/ROBODOG/logs/solo_flat/Jan04_17-44-50_", "--checkpoint", "500"]
+        }
+    ]
+}
+
+
+
+//--sim_device cuda --rl_device=cuda --num_envs 2 --max_iterations 500 --task anymal_c_rough --load_run /home/sj/Desktop/SHADYcodes/RoboDog/logs/rough_anymal_c/Dec17_00-56-53_/ --checkpoint 2000

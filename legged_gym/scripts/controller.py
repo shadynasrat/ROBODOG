@@ -12,7 +12,7 @@ class MyController(Controller):
         self.y = 0
         self.hx = 0
         self.hy = 0
-        self.logger = False
+        self.logger = True
 
     def on_L3_up(self, value):
         self.x = - 2 * value / 32767
@@ -36,7 +36,7 @@ class MyController(Controller):
 
     def on_L3_y_at_rest(self):
         """L3 joystick is at rest after the joystick was moved and let go off"""
-        self.y = 0 
+        self.y = 0
         if self.logger == True:
             print("on_L3_y_at_rest")
 
@@ -70,13 +70,13 @@ class MyController(Controller):
 
     def on_R3_y_at_rest(self):
         """R3 joystick is at rest after the joystick was moved and let go off"""
-        self.hx = 0 
+        self.hx = 0
         if self.logger == True:
             print("on_R3_y_at_rest")
 
     def on_R3_x_at_rest(self):
         """R3 joystick is at rest after the joystick was moved and let go off"""
-        self.hy = 0 
+        self.hy = 0
         if self.logger == True:
             print("on_R3_x_at_rest")
 

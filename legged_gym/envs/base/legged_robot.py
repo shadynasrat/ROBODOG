@@ -234,7 +234,7 @@ class LeggedRobot(BaseTask):
         self.up_axis_idx = 2 # 2 for z, 1 for y -> adapt gravity accordingly
         self.sim = self.gym.create_sim(self.sim_device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         mesh_type = self.cfg.terrain.mesh_type
-        if mesh_type in ['heightfield', 'trimesh']:
+        if mesh_type in ['heightfield', 'trimesh', 'plane']:
             self.terrain = Terrain(self.cfg.terrain, self.num_envs)
         if mesh_type=='plane':
             self._create_ground_plane()
@@ -325,7 +325,8 @@ class LeggedRobot(BaseTask):
             Default behaviour: Compute ang vel command based on target and heading, compute measured terrain heights and randomly push robots
         """ 
      
-        #env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
+        env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
+        self._resample_commands(env_ids)
         self.update_command()
         
         if self.cfg.commands.heading_command:
@@ -344,17 +345,21 @@ class LeggedRobot(BaseTask):
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
         """
+        #if self.cfg.asset.name == 'solo':
+            #self.commands[:,0] = 0.2
+        return
+        
         #self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         #self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-        self.commands[env_ids, 0] = torch.tensor(0.0, device=self.device)
-        self.commands[env_ids, 1] = torch.tensor(0.0, device=self.device)
+        #self.commands[env_ids, 0] = torch.tensor(0.0, device=self.device)
+        #self.commands[env_ids, 1] = torch.tensor(0.0, device=self.device)
 
-        if self.cfg.commands.heading_command:
+        #if self.cfg.commands.heading_command:
             #self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-            self.commands[env_ids, 3] = torch.tensor(0.0, device=self.device)
-        else:
+        #    self.commands[env_ids, 3] = torch.tensor(0.0, device=self.device)
+        #else:
             #self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-            self.commands[env_ids, 2] = torch.tensor(0.0, device=self.device)
+        #    self.commands[env_ids, 2] = torch.tensor(0.0, device=self.device)
         
         # set small commands to zero
         # self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
@@ -483,16 +488,18 @@ class LeggedRobot(BaseTask):
         
         "wasd" keyboard
         """
-        controller.logger = False
-        self.commands[:, 0] = torch.tensor(controller.x, device=self.device)
-        self.commands[:, 1] = torch.tensor(-controller.y, device=self.device)
-        self.commands[:, 2] = torch.tensor(0.0, device=self.device)
+        if self.cfg.control.controller == True:
+            controller.logger = True
+            if self.cfg.asset.name == "solo":
+                self.commands[:,0] = torch.tensor(controller.x, device=self.device)
+                return
+            
+            self.commands[:, 0] = torch.tensor(controller.x, device=self.device)
+            self.commands[:, 1] = torch.tensor(-controller.y, device=self.device)
+            self.commands[:, 2] = torch.tensor(0.0, device=self.device)
+            angle = vector_to_angle(controller.hx, controller.hy)
+            self.commands[:, 3] = torch.tensor(angle, device=self.device)
 
-        self.hx = 0
-        self.hy = 0
-
-        angle = vector_to_angle(controller.hx, controller.hy)
-        self.commands[:, 3] = torch.tensor(angle, device=self.device)
 
     def _get_noise_scale_vec(self, cfg):
         """ Sets a vector used to scale the noise added to the observations.
@@ -570,6 +577,8 @@ class LeggedRobot(BaseTask):
             name = self.dof_names[i]
             angle = self.cfg.init_state.default_joint_angles[name]
             self.default_dof_pos[i] = angle
+
+        for i in range(len(self.cfg.control.action_dof_name)):
             found = False
             for dof_name in self.cfg.control.stiffness.keys():
                 if dof_name in name:
@@ -703,7 +712,8 @@ class LeggedRobot(BaseTask):
         base_init_state_list = self.cfg.init_state.pos + self.cfg.init_state.rot + self.cfg.init_state.lin_vel + self.cfg.init_state.ang_vel
         self.base_init_state = to_torch(base_init_state_list, device=self.device, requires_grad=False)
         start_pose = gymapi.Transform()
-        start_pose.p = gymapi.Vec3(*self.base_init_state[:3])
+        #start_pose.p = gymapi.Vec3(*self.base_init_state[:3])
+        start_pose.p = gymapi.Vec3(0.0, 0.0, 0.0)
 
         self._get_env_origins()
         env_lower = gymapi.Vec3(0., 0., 0.)
@@ -808,8 +818,26 @@ class LeggedRobot(BaseTask):
         # draw height lines
         if not self.terrain.cfg.direction_helper:
             return
+        
         self.gym.clear_lines(self.viewer)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
+        
+        if self.cfg.asset.name == 'solo':
+            red_balls = gymutil.WireframeSphereGeometry(radius= 0.1, color=(1, 0, 0))
+            ylw_balls = gymutil.WireframeSphereGeometry(radius= 0.05, color=(1, 1, 0))
+            lin_vel_Z_Goal = self.commands[:,0].tolist()                                            #red
+            lin_vel_Z_Base = self.dof_pos
+            for i in range(self.num_envs):
+                base_pos = (self.root_states[i, :3]).cpu().numpy()
+                
+                linear_Base = [base_pos[0]    , base_pos[1]     , base_pos[2] + lin_vel_Z_Base[i][0]]                #Base linear velocity
+                linear_Goal = [base_pos[0]                           , base_pos[1]                            , base_pos[2] + lin_vel_Z_Goal[i]]                #Goal linear velocity
+                lin_Base = gymapi.Transform(gymapi.Vec3(linear_Base[0],linear_Base[1],linear_Base[2]), r=None)
+                lin_Goal = gymapi.Transform(gymapi.Vec3(linear_Goal[0],linear_Goal[1],linear_Goal[2]), r=None)
+                gymutil.draw_lines(red_balls, self.gym, self.viewer, self.envs[i], lin_Goal)
+                gymutil.draw_lines(ylw_balls, self.gym, self.viewer, self.envs[i], lin_Base)
+            return
+
         red_balls = gymutil.WireframeSphereGeometry(radius= 0.1, color=(1, 0, 0))
         blu_balls = gymutil.WireframeSphereGeometry(radius= 0.05, color=(0, 1, 1))
         ylw_balls = gymutil.WireframeSphereGeometry(radius= 0.05, color=(1, 1, 0))
@@ -895,10 +923,14 @@ class LeggedRobot(BaseTask):
     #------------ reward functions----------------
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
+        if self.cfg.asset.name == "solo":
+            return torch.square(self.dof_pos[:,0])
         return torch.square(self.base_lin_vel[:, 2])
     
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
+        if self.cfg.asset.name == "solo":
+            return 0.0
         return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
     
     def _reward_orientation(self):
@@ -907,9 +939,14 @@ class LeggedRobot(BaseTask):
 
     def _reward_base_height(self):
         # Penalize base height away from target
+        if self.cfg.asset.name == "solo":
+            lin_vel_Z_Goal = self.commands[:,0].tolist()                                            #red
+            lin_vel_Z_Base = self.dof_pos[:,0]
+            return torch.square(lin_vel_Z_Goal - lin_vel_Z_Base)
+
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
         return torch.square(base_height - self.cfg.rewards.base_height_target)
-    
+
     def _reward_torques(self):
         # Penalize torques
         return torch.sum(torch.square(self.torques), dim=1)
@@ -955,7 +992,9 @@ class LeggedRobot(BaseTask):
         return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
     
     def _reward_tracking_ang_vel(self):
-        # Tracking of angular velocity commands (yaw) 
+        # Tracking of angular velocity commands (yaw)
+        if self.cfg.asset.name == 'solo':
+            return 0.0
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
         return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_sigma)
 
@@ -979,6 +1018,8 @@ class LeggedRobot(BaseTask):
         
     def _reward_stand_still(self):
         # Penalize motion at zero commands
+        if self.cfg.asset.name == "solo":
+            return 0.0
         return torch.sum(torch.abs(self.dof_pos - self.default_dof_pos), dim=1) * (torch.norm(self.commands[:, :2], dim=1) < 0.1)
 
     def _reward_feet_contact_forces(self):
